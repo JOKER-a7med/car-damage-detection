@@ -20,3 +20,4 @@ Two models: CNN from scratch vs Transfer Learning (MobileNetV2)
 - /results - confusion matrix, ROC curve, training curves
 - /notebooks - main project notebook
 - app.py - Streamlit web application
+"Updated README" 
