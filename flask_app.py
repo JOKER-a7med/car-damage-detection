@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify
-import tensorflow as tf
+import keras
 import numpy as np
 from PIL import Image
 import traceback
@@ -10,7 +10,7 @@ app = Flask(__name__)
 MODEL_PATH = r'D:\car_damage_project\models\best_binary_model.keras'
 
 print(f"🔄 جاري تحميل الموديل: {MODEL_PATH}")
-model = tf.keras.models.load_model(MODEL_PATH)
+model = keras.models.load_model(MODEL_PATH)
 print("✅ الموديل تحمّل بنجاح!")
 
 CLASS_NAMES = ['Minor Damage', 'Severe Damage']
