@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>كشف أضرار السيارات</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: rgba(255,255,255,0.05);
+            --surface-hover: rgba(255,255,255,0.08);
+            --border: rgba(255,255,255,0.10);
+            --border-bright: rgba(255,255,255,0.18);
+            --text: #f5f5f7;
+            --text-sub: rgba(255,255,255,0.45);
+            --accent: #6366f1;
+            --accent2: #8b5cf6;
+            --blur: blur(24px);
+            /* damage class colors */
+            --c-scratch:      #ffd60a;
+            --c-dent:         #30d158;
+            --c-dislocation:  #ff453a;
+            --c-shatter:      #bf5af2;
+        }
+
+        body {
+            font-family: -apple-system, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 60px 20px 40px;
+        }
+        body::before, body::after {
+            content: ''; position: fixed; border-radius: 50%;
+            filter: blur(120px); opacity: 0.18; pointer-events: none; z-index: 0;
+        }
+        body::before { width: 500px; height: 500px; background: #6366f1; top: -100px; left: -100px; }
+        body::after  { width: 400px; height: 400px; background: #8b5cf6; bottom: -80px; right: -80px; }
+
+        .container { width: 100%; max-width: 640px; position: relative; z-index: 1; }
+
+        /* Header */
+        .app-header { text-align: center; margin-bottom: 36px; }
+        .app-icon {
+            width: 72px; height: 72px;
+            background: linear-gradient(145deg, #6366f1, #8b5cf6);
+            border-radius: 20px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2rem; margin: 0 auto 16px;
+            box-shadow: 0 8px 32px rgba(99,102,241,0.4);
+        }
+        h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; }
+        .subtitle { font-size: 0.93rem; color: var(--text-sub); margin-top: 6px; }
+
+        /* Upload zone */
+        .upload-zone {
+            padding: 30px 24px; text-align: center; cursor: pointer;
+            transition: all 0.25s;
+            border: 1.5px dashed var(--border-bright); border-radius: 20px;
+            background: var(--surface); backdrop-filter: var(--blur);
+            -webkit-backdrop-filter: var(--blur); margin-bottom: 12px;
+            position: relative;
+        }
+        .upload-zone:hover { background: var(--surface-hover); border-color: var(--accent); }
+        .upload-zone input {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer;
+            width: 100%; height: 100%;
+        }
+        .upload-icon { font-size: 2rem; margin-bottom: 8px; display: block; }
+        .upload-title { font-size: 0.98rem; font-weight: 600; }
+        .upload-sub { font-size: 0.8rem; color: var(--text-sub); margin-top: 4px; }
+
+        /* Thumbnail strip */
+        .thumb-strip {
+            display: none; gap: 8px; margin-bottom: 12px;
+            overflow-x: auto; padding: 4px 2px; scrollbar-width: none;
+        }
+        .thumb-strip::-webkit-scrollbar { display: none; }
+        .thumb-strip.visible { display: flex; }
+        .thumb-item {
+            flex-shrink: 0; width: 60px; height: 60px;
+            border-radius: 12px; overflow: hidden;
+            border: 1.5px solid var(--border-bright); position: relative;
+        }
+        .thumb-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .thumb-num {
+            position: absolute; bottom: 3px; right: 3px;
+            background: rgba(0,0,0,0.65); color: #fff;
+            font-size: 0.58rem; font-weight: 700;
+            border-radius: 4px; padding: 1px 4px;
+        }
+
+        /* Buttons */
+        .btn-analyze {
+            width: 100%; padding: 15px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            border: none; border-radius: 14px;
+            color: #fff; font-size: 1rem; font-weight: 600;
+            cursor: pointer; transition: all 0.25s; margin-bottom: 24px;
+            box-shadow: 0 4px 24px rgba(99,102,241,0.35);
+        }
+        .btn-analyze:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 32px rgba(99,102,241,0.5);
+        }
+        .btn-analyze:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; transform: none; }
+
+        /* Results */
+        .results-list { display: none; flex-direction: column; gap: 14px; margin-bottom: 14px; }
+
+        /* Result card */
+        .result-card {
+            border-radius: 20px; overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--surface); backdrop-filter: var(--blur);
+            -webkit-backdrop-filter: var(--blur); transition: transform 0.2s;
+        }
+        .result-card:hover { transform: translateY(-2px); }
+
+        .card-top { display: flex; }
+        .card-img {
+            width: 120px; flex-shrink: 0;
+            position: relative; overflow: hidden; min-height: 130px;
+        }
+        .card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        /* Colored accent bar based on class */
+        .card-img::after {
+            content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 3px;
+        }
+        .result-card.Scratch     .card-img::after { background: var(--c-scratch); }
+        .result-card.Dent        .card-img::after { background: var(--c-dent); }
+        .result-card.Dislocation .card-img::after { background: var(--c-dislocation); }
+        .result-card.Shatter     .card-img::after { background: var(--c-shatter); }
+
+        .card-info {
+            flex: 1; padding: 12px 14px; display: flex;
+            flex-direction: column; gap: 8px;
+        }
+
+        /* Verdict */
+        .verdict-badge {
+            font-size: 0.92rem; font-weight: 700;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .result-card.Scratch     .verdict-badge { color: var(--c-scratch); }
+        .result-card.Dent        .verdict-badge { color: var(--c-dent); }
+        .result-card.Dislocation .verdict-badge { color: var(--c-dislocation); }
+        .result-card.Shatter     .verdict-badge { color: var(--c-shatter); }
+
+        .verdict-dot {
+            width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+        }
+        .result-card.Scratch     .verdict-dot { background: var(--c-scratch);     box-shadow: 0 0 7px var(--c-scratch); }
+        .result-card.Dent        .verdict-dot { background: var(--c-dent);        box-shadow: 0 0 7px var(--c-dent); }
+        .result-card.Dislocation .verdict-dot { background: var(--c-dislocation); box-shadow: 0 0 7px var(--c-dislocation); }
+        .result-card.Shatter     .verdict-dot { background: var(--c-shatter);     box-shadow: 0 0 7px var(--c-shatter); }
+
+        /* Probability bars */
+        .prob-list { display: flex; flex-direction: column; gap: 4px; }
+        .prob-row { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; }
+        .prob-name { width: 72px; color: var(--text-sub); flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .prob-bar-wrap {
+            flex: 1; height: 5px;
+            background: rgba(255,255,255,0.07);
+            border-radius: 50px; overflow: hidden;
+        }
+        .prob-bar-fill { height: 100%; border-radius: 50px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+        .prob-val { width: 34px; text-align: left; font-weight: 600; color: var(--text); font-size: 0.72rem; flex-shrink: 0; }
+
+        /* per-class bar color */
+        .pb-Scratch     { background: var(--c-scratch); }
+        .pb-Dent        { background: var(--c-dent); }
+        .pb-Dislocation { background: var(--c-dislocation); }
+        .pb-Shatter     { background: var(--c-shatter); }
+
+        /* Advice */
+        .card-advice {
+            padding: 10px 14px; font-size: 0.77rem; line-height: 1.65;
+            border-top: 1px solid var(--border); white-space: pre-line;
+        }
+        .result-card.Scratch     .card-advice { color: #fde68a; }
+        .result-card.Dent        .card-advice { color: #86efac; }
+        .result-card.Dislocation .card-advice { color: #fca5a5; }
+        .result-card.Shatter     .card-advice { color: #d8b4fe; }
+
+        /* PDF button */
+        .btn-pdf {
+            width: 100%; padding: 14px;
+            background: rgba(255,255,255,0.06);
+            backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+            border: 1px solid var(--border-bright); border-radius: 14px;
+            color: var(--text); font-size: 0.93rem; font-weight: 500;
+            cursor: pointer; transition: all 0.25s; display: none;
+        }
+        .btn-pdf:hover { background: rgba(255,255,255,0.1); }
+
+        /* Menu */
+        .menu-wrapper { position: fixed; top: 16px; right: 20px; z-index: 200; }
+        .menu-trigger {
+            background: rgba(255,255,255,0.08); backdrop-filter: var(--blur);
+            -webkit-backdrop-filter: var(--blur); border: 1px solid var(--border-bright);
+            width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 3px; padding: 0; transition: 0.2s;
+        }
+        .menu-trigger:hover { background: rgba(255,255,255,0.14); }
+        .menu-trigger .dot { width: 3.5px; height: 3.5px; background: rgba(255,255,255,0.7); border-radius: 50%; }
+        .dropdown {
+            display: none; position: absolute; top: 46px; right: 0;
+            background: rgba(18,18,28,0.88); backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px); border: 1px solid var(--border-bright);
+            border-radius: 16px; padding: 12px; min-width: 175px;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+        }
+        .dropdown.open { display: block; }
+        .dropdown-label {
+            font-size: 0.68rem; color: var(--text-sub);
+            margin-bottom: 6px; margin-top: 10px; padding: 0 4px;
+            text-transform: uppercase; letter-spacing: 0.06em;
+        }
+        .dropdown-label:first-child { margin-top: 0; }
+        .toggle-group {
+            display: flex; background: rgba(255,255,255,0.05);
+            border-radius: 10px; overflow: hidden; gap: 2px; padding: 2px;
+        }
+        .toggle-group button {
+            background: transparent; border: none; color: var(--text-sub);
+            padding: 6px 12px; border-radius: 8px; cursor: pointer;
+            font-size: 0.88rem; font-weight: 500; flex: 1; transition: 0.2s;
+        }
+        .toggle-group button.active { background: rgba(255,255,255,0.12); color: var(--text); }
+
+        /* Light theme */
+        body.light {
+            --bg: #f2f2f7; --surface: rgba(255,255,255,0.72);
+            --surface-hover: rgba(255,255,255,0.9);
+            --border: rgba(0,0,0,0.07); --border-bright: rgba(0,0,0,0.13);
+            --text: #1c1c1e; --text-sub: rgba(0,0,0,0.45);
+        }
+        body.light::before, body.light::after { opacity: 0.06; }
+        body.light .dropdown { background: rgba(245,245,250,0.94); }
+        body.light .toggle-group { background: rgba(0,0,0,0.05); }
+        body.light .toggle-group button.active { background: rgba(0,0,0,0.1); }
+        body.light .prob-bar-wrap { background: rgba(0,0,0,0.08); }
+    </style>
+</head>
+<body>
+
+<div class="menu-wrapper">
+    <button class="menu-trigger" onclick="toggleMenu()">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </button>
+    <div class="dropdown" id="dropdown">
+        <div class="dropdown-label">Theme</div>
+        <div class="toggle-group">
+            <button id="sun-btn"  onclick="setTheme('light')">☀️</button>
+            <button id="moon-btn" onclick="setTheme('dark')" class="active">🌙</button>
+        </div>
+        <div class="dropdown-label">Language</div>
+        <div class="toggle-group">
+            <button id="ar-btn" onclick="setLang('ar')" class="active">AR</button>
+            <button id="en-btn" onclick="setLang('en')">EN</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="app-header">
+        <div class="app-icon">🚗</div>
+        <h1 id="title">كشف أضرار السيارات</h1>
+        <p class="subtitle" id="subtitle">ارفع صورة سيارة واعرف نوع الضرر</p>
+    </div>
+
+    <div class="upload-zone">
+        <input type="file" id="fileInput" accept="image/*" multiple onchange="onFilesSelected(event)">
+        <span class="upload-icon">📂</span>
+        <div class="upload-title" id="upload-label">اضغط لاختيار صور</div>
+        <div class="upload-sub"   id="upload-sub">PNG, JPG — صورة أو أكثر</div>
+    </div>
+
+    <div class="thumb-strip" id="thumb-strip"></div>
+
+    <button class="btn-analyze" id="btn" onclick="predict()" disabled>🔍 تحليل الصور</button>
+
+    <div class="results-list" id="results-list"></div>
+
+    <button class="btn-pdf" id="pdf-btn" onclick="downloadPDF()">📄 تحميل التقرير</button>
+</div>
+
+<script>
+    // ─── Menu ──────────────────────────────────────────────────
+    function toggleMenu() { document.getElementById('dropdown').classList.toggle('open'); }
+    document.addEventListener('click', e => {
+        if (!document.querySelector('.menu-wrapper').contains(e.target))
+            document.getElementById('dropdown').classList.remove('open');
+    });
+
+    let AR = true;
+    let allResults = [];
+
+    // ─── Class meta ────────────────────────────────────────────
+    const CLASS_META = {
+        Scratch: {
+            ar: 'خدش', en: 'Scratch', icon: '✏️',
+            advice: {
+                ar: { title: '✏️ خدش — ضرر سطحي', text: '• خدش في الطلاء السطحي فقط\n• يمكن إصلاحه بـ polishing أو إعادة دهان جزئي\n• تكلفة منخفضة ووقت إصلاح قصير\n• لا يؤثر على سلامة القيادة' },
+                en: { title: '✏️ Scratch — Surface Damage', text: '• Superficial paint scratch only\n• Can be fixed with polishing or partial repaint\n• Low cost and quick repair time\n• Does not affect driving safety' }
+            }
+        },
+        Dent: {
+            ar: 'دهس / تجويف', en: 'Dent', icon: '🔨',
+            advice: {
+                ar: { title: '🔨 دنت — تشوه هيكلي بسيط', text: '• تجويف في الهيكل دون تلف في الطلاء\n• يمكن إصلاحه بـ PDR (إصلاح بدون دهان)\n• تكلفة معقولة وسريع الإصلاح\n• راجع ورشة متخصصة في PDR' },
+                en: { title: '🔨 Dent — Minor Body Deformation', text: '• Indentation without paint damage\n• Can be fixed with PDR (Paintless Dent Repair)\n• Reasonable cost and quick fix\n• Visit a PDR specialist workshop' }
+            }
+        },
+        Dislocation: {
+            ar: 'تهشم / تشوه', en: 'Dislocation', icon: '⚠️',
+            advice: {
+                ar: { title: '⚠️ تهشم — ضرر هيكلي جسيم', text: '• تشوه واضح في الهيكل أو الأجزاء\n• يحتاج فحصاً دقيقاً قبل القيادة\n• توجه لمركز متخصص في هياكل السيارات\n• تواصل مع شركة التأمين فوراً' },
+                en: { title: '⚠️ Dislocation — Serious Body Damage', text: '• Visible deformation in the body or parts\n• Requires careful inspection before driving\n• Visit a specialized body repair center\n• Contact your insurance company immediately' }
+            }
+        },
+        Shatter: {
+            ar: 'تحطم زجاج', en: 'Shatter', icon: '🔮',
+            advice: {
+                ar: { title: '🔮 تحطم زجاج — يحتاج استبدال عاجل', text: '• تحطم أو تشقق في زجاج السيارة\n• لا تقود السيارة إذا كان الزجاج الأمامي متحطماً\n• استبدال الزجاج ضروري فوراً للسلامة\n• تواصل مع شركة التأمين لتغطية الاستبدال' },
+                en: { title: '🔮 Shatter — Urgent Glass Replacement', text: '• Shattered or cracked glass detected\n• Do not drive if windshield is shattered\n• Glass replacement is immediately required for safety\n• Contact your insurance for glass coverage' }
+            }
+        }
+    };
+
+    const CLASSES_ORDER = ['Dent', 'Dislocation', 'Scratch', 'Shatter'];
+
+    const T = {
+        ar: {
+            title: 'كشف أضرار السيارات', subtitle: 'ارفع صورة سيارة واعرف نوع الضرر',
+            uploadLabel: 'اضغط لاختيار صور', uploadSub: 'PNG, JPG — صورة أو أكثر',
+            btn: '🔍 تحليل الصور', pdf: '📄 تحميل التقرير',
+            conf: 'ثقة الموديل'
+        },
+        en: {
+            title: 'Car Damage Detection', subtitle: 'Upload a car image to detect damage type',
+            uploadLabel: 'Click to select images', uploadSub: 'PNG, JPG — one or more',
+            btn: '🔍 Analyze Images', pdf: '📄 Download Report',
+            conf: 'Model Confidence'
+        }
+    };
+
+    // ─── Language / Theme ──────────────────────────────────────
+    function setLang(lang) {
+        AR = (lang === 'ar');
+        const t = AR ? T.ar : T.en;
+        document.getElementById('title').innerText       = t.title;
+        document.getElementById('subtitle').innerText    = t.subtitle;
+        document.getElementById('upload-label').innerText = t.uploadLabel;
+        document.getElementById('upload-sub').innerText  = t.uploadSub;
+        document.documentElement.dir  = AR ? 'rtl' : 'ltr';
+        document.documentElement.lang = AR ? 'ar'  : 'en';
+        document.getElementById('ar-btn').classList.toggle('active', AR);
+        document.getElementById('en-btn').classList.toggle('active', !AR);
+        const btn = document.getElementById('btn');
+        if (!btn.disabled) btn.innerText = t.btn;
+        document.getElementById('pdf-btn').innerText = t.pdf;
+        if (allResults.length) renderResults();
+    }
+
+    function setTheme(theme) {
+        document.body.classList.toggle('light', theme === 'light');
+        document.getElementById('sun-btn').classList.toggle('active',   theme === 'light');
+        document.getElementById('moon-btn').classList.toggle('active',  theme === 'dark');
+    }
+
+    // ─── File selection ────────────────────────────────────────
+    function onFilesSelected(e) {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        const strip = document.getElementById('thumb-strip');
+        strip.innerHTML = '';
+        files.forEach((f, i) => {
+            const url = URL.createObjectURL(f);
+            strip.innerHTML += `<div class="thumb-item"><img src="${url}"><span class="thumb-num">${i+1}</span></div>`;
+        });
+        strip.classList.add('visible');
+        allResults = [];
+        document.getElementById('results-list').innerHTML = '';
+        document.getElementById('results-list').style.display = 'none';
+        document.getElementById('pdf-btn').style.display = 'none';
+        document.getElementById('btn').disabled = false;
+        document.getElementById('btn').innerText = AR ? T.ar.btn : T.en.btn;
+    }
+
+    // ─── Render results ────────────────────────────────────────
+    function renderResults() {
+        const lang = AR ? 'ar' : 'en';
+        const list = document.getElementById('results-list');
+        list.innerHTML = '';
+
+        allResults.forEach(r => {
+            const meta = CLASS_META[r.label] || CLASS_META['Dent'];
+            const adv  = meta.advice[lang];
+            const lbl  = `${meta.icon} ${meta[lang]}`;
+
+            // probability rows
+            let probRows = '';
+            CLASSES_ORDER.forEach(cls => {
+                const p   = r.all_probs[cls] || 0;
+                const nm  = CLASS_META[cls][lang];
+                probRows += `
+                <div class="prob-row">
+                    <span class="prob-name">${nm}</span>
+                    <div class="prob-bar-wrap">
+                        <div class="prob-bar-fill pb-${cls}" style="width:${p}%"></div>
+                    </div>
+                    <span class="prob-val">${p.toFixed(1)}%</span>
+                </div>`;
+            });
+
+            const card = document.createElement('div');
+            card.className = `result-card ${r.label}`;
+            card.innerHTML = `
+                <div class="card-top">
+                    <div class="card-img"><img src="${r.dataURL}" alt=""></div>
+                    <div class="card-info">
+                        <div class="verdict-badge"><span class="verdict-dot"></span>${lbl}</div>
+                        <div class="prob-list">${probRows}</div>
+                    </div>
+                </div>
+                <div class="card-advice"><strong>${adv.title}</strong>\n${adv.text}</div>`;
+            list.appendChild(card);
+        });
+
+        list.style.display = 'flex';
+    }
+
+    // ─── Predict ───────────────────────────────────────────────
+    async function predict() {
+        const files = Array.from(document.getElementById('fileInput').files);
+        if (!files.length) return;
+        const btn = document.getElementById('btn');
+        btn.disabled = true;
+        allResults = [];
+        document.getElementById('results-list').innerHTML = '';
+        document.getElementById('pdf-btn').style.display = 'none';
+
+        for (let i = 0; i < files.length; i++) {
+            btn.innerText = `⏳ ${i+1}/${files.length} ${AR ? 'جاري التحليل…' : 'Analyzing…'}`;
+            const file    = files[i];
+            const dataURL = await toDataURL(file);
+            const fd = new FormData();
+            fd.append('image', file);
+            try {
+                const res = await fetch('/predict', { method: 'POST', body: fd });
+                const d   = await res.json();
+                allResults.push({ file, dataURL, label: d.label, confidence: d.confidence, all_probs: d.all_probs });
+            } catch {
+                const fallback = { Dent: 25, Dislocation: 25, Scratch: 25, Shatter: 25 };
+                allResults.push({ file, dataURL, label: 'Dent', confidence: 25, all_probs: fallback });
+            }
+        }
+
+        renderResults();
+        btn.disabled = false;
+        btn.innerText = AR ? T.ar.btn : T.en.btn;
+        const pdfBtn = document.getElementById('pdf-btn');
+        pdfBtn.innerText = AR ? T.ar.pdf : T.en.pdf;
+        pdfBtn.style.display = 'block';
+    }
+
+    const toDataURL = f => new Promise(res => {
+        const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(f);
+    });
+
+    // ─── PDF Report ────────────────────────────────────────────
+    function downloadPDF() {
+        if (!allResults.length) return;
+        const lang = AR ? 'ar' : 'en';
+        const now  = new Date().toLocaleString(AR ? 'ar-EG' : 'en-US');
+
+        let rows = '';
+        allResults.forEach((r, i) => {
+            const meta = CLASS_META[r.label] || CLASS_META['Dent'];
+            const adv  = meta.advice[lang];
+            const lbl  = `${meta.icon} ${meta[lang]}`;
+            const colors = { Scratch: '#d97706', Dent: '#059669', Dislocation: '#dc2626', Shatter: '#7c3aed' };
+            const c = colors[r.label] || '#6366f1';
+
+            let probTable = '';
+            CLASSES_ORDER.forEach(cls => {
+                const p  = r.all_probs[cls] || 0;
+                const nm = CLASS_META[cls][lang];
+                probTable += `<tr><td class="k">${nm}</td><td class="v">${p.toFixed(1)}%</td></tr>`;
+            });
+
+            rows += `<div class="blk">
+                <div class="blk-head">${AR?'صورة':'Image'} ${i+1}</div>
+                <div class="blk-body">
+                    <img src="${r.dataURL}" style="width:140px;border-radius:10px;object-fit:cover;flex-shrink:0">
+                    <div style="flex:1">
+                        <div style="font-weight:700;font-size:1.05rem;margin-bottom:10px;color:${c}">${lbl}</div>
+                        <table><thead><tr><th class="k">${AR?'النوع':'Type'}</th><th class="v">${AR?'الاحتمال':'Prob'}</th></tr></thead>
+                        <tbody>${probTable}</tbody></table>
+                        <div style="border-radius:8px;padding:12px;border:1px solid ${c};background:${c}18;font-size:.82rem;white-space:pre-line;margin-top:10px">
+                            <div style="font-weight:700;margin-bottom:5px;color:${c}">${adv.title}</div>${adv.text}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        });
+
+        const w = window.open('', '_blank');
+        w.document.write(`<!DOCTYPE html><html dir="${AR?'rtl':'ltr'}">
+        <head><meta charset="UTF-8"><title>Report</title>
+        <style>body{font-family:'Segoe UI',sans-serif;padding:36px;color:#1a1a2e}
+        h1{color:#6366f1;margin-bottom:4px}.date{color:#888;font-size:.83rem;margin-bottom:26px}
+        .blk{border:1.5px solid #6366f1;border-radius:12px;padding:18px;margin-bottom:20px;page-break-inside:avoid}
+        .blk-head{font-weight:700;color:#6366f1;margin-bottom:12px}.blk-body{display:flex;gap:16px;align-items:flex-start}
+        table{width:100%;border-collapse:collapse;margin-bottom:10px}
+        td,th{padding:5px 8px;border-bottom:1px solid #eee;text-align:right}
+        .k{color:#888;width:50%}.v{font-weight:700}</style>
+        </head><body>
+        <h1>🚗 ${AR?'تقرير كشف أضرار السيارة':'Car Damage Detection Report'}</h1>
+        <div class="date">${now} — ${allResults.length} ${AR?'صورة':'image(s)'}</div>
+        ${rows}
+        <script>window.onload=()=>window.print()<\/script>
+        </body></html>`);
+        w.document.close();
+    }
+</script>
+</body>
+</html>
